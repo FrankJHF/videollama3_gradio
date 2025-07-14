@@ -1,0 +1,30 @@
+# Python bytecode
+*.pyc
+
+# Logs
+*.log
+
+# Virtualenv
+venv/
+
+# Build
+build/
+dist/
+__pycache__/
+
+# IDE
+.vscode/
+.idea/
+
+# Model
+model*/
+
+# Cursor
+.tasks/
+.cursor/
+
+# Gradio
+.gradio/
+
+# Examples
+examples/

@@ -1,0 +1,14 @@
+--extra-index-url https://download.pytorch.org/whl/cu121
+torch==2.4.0
+torchvision==0.19.0
+transformers==4.46.3
+gradio==5.0.1
+pydantic==2.10.6
+timm==1.0.17
+accelerate==1.0.1
+https://github.com/Dao-AILab/flash-attention/releases/download/v2.7.3/flash_attn-2.7.3+cu12torch2.4cxx11abiFALSE-cp310-cp310-linux_x86_64.whl
+spaces
+decord
+ffmpeg-python
+imageio
+opencv-python

@@ -1,0 +1,14 @@
+model:
+  path: model_ck
+  device: cuda
+  torch_dtype: bfloat16
+  attn_implementation: flash_attention_2
+
+inference:
+  fps: 2
+  max_frames: 160
+  modal: video
+  max_new_tokens: 180
+  do_sample: false
+  merge_size: 2
+  timeout: 300
