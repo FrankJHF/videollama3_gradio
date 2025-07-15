@@ -5,6 +5,9 @@ import threading
 import time
 import traceback
 import glob
+import json
+import ast
+import re
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from typing import Dict, List, Optional, Generator, Tuple, Any
@@ -209,9 +212,18 @@ class VideoLLaMA3App:
 
             # 使用完全相同的处理器和分析方式
             modal = self.config.config['inference']['modal']
+
+            # 手动应用聊天模板以消除UserWarning
+            # 处理器内部期望一个格式化的字符串，而不是对话列表
+            text_input = self.processor.tokenizer.apply_chat_template(
+                conversation,
+                tokenize=False,
+                add_generation_prompt=True
+            )
+
             inputs = self.processor(
                 images=[frames] if modal != "text" else None,
-                text=conversation,
+                text=text_input, # 传入预格式化的字符串
                 merge_size=self.config.config['inference']['merge_size'],
                 return_tensors="pt",
             )
@@ -286,6 +298,79 @@ class VideoLLaMA3App:
         except Exception as e:
             return f"获取模型信息失败: {str(e)}"
 
+def parse_model_output(output_str: str) -> List[Dict]:
+    """解析模型输出的字符串，提取事件字典"""
+    events = []
+    # 去除可能的Markdown代码块标记
+    output_str = re.sub(r"```json\n?|```", "", output_str).strip()
+
+    # 兼容单字典和多字典场景
+    # 查找所有被大括号包围的部分
+    # 这个正则表达式假设事件描述中不包含未转义的大括号
+    dict_strings = re.findall(r"\{[^{}]+\}", output_str.replace("\n", ""))
+
+    if not dict_strings:
+        # 如果找不到，尝试将整个字符串作为单个Python字面量解析
+        try:
+            # 将Python字典转为JSON字符串，然后再解析
+            # 这样可以处理单引号等问题
+            temp_list = ast.literal_eval(f"[{output_str}]")
+            events.extend(temp_list)
+        except (ValueError, SyntaxError) as e:
+            print(f"解析整个字符串失败: {e}")
+            return [] # 如果还是失败，返回空列表
+        return events
+
+    for d_str in dict_strings:
+        try:
+            # ast.literal_eval 更安全，能处理Python的字典格式（如单引号）
+            event = ast.literal_eval(d_str)
+            if isinstance(event, dict):
+                events.append(event)
+        except (ValueError, SyntaxError) as e:
+            print(f"解析单个事件失败: '{d_str}', 错误: {e}")
+            continue
+    return events
+
+
+def format_timeline_output(result_str: str) -> str:
+    """将模型输出的事件字符串格式化为包含状态和时间轴的HTML"""
+    events = parse_model_output(result_str)
+
+    if not events:
+        status_md = "## <p style='text-align:center;'>⚪ 分析完成，未检测到有效事件信息。</p>"
+        timeline_md = "<p>未检测到有效事件信息。</p>"
+        return status_md + timeline_md
+
+    # a. 总体状态
+    is_emergency = any(item.get('emergency_exist') == '是' for item in events)
+    if is_emergency:
+        status_md = "## <p style='color:#FF4136; text-align:center;'>🔴 检测到应急事件！</p>"
+    else:
+        status_md = "## <p style='color:#2ECC40; text-align:center;'>🟢 未发现异常</p>"
+
+    # b. 事件时间轴
+    timeline_md = ""
+    for i, event in enumerate(events, 1):
+        if event.get('emergency_exist') == '是':
+            style = "border-left: 5px solid #FF4136; padding-left: 15px; margin: 20px 0;"
+            icon = "🔥"
+            level = "警告"
+        else:
+            style = "border-left: 5px solid #2ECC40; padding-left: 15px; margin: 20px 0;"
+            icon = "✅"
+            level = "正常"
+
+        timeline_md += f"""
+        <div style='{style}'>
+            <p style='font-size: 1.1em; font-weight: bold; margin:0;'>{icon} 事件 {i}: {level}</p>
+            <p style='margin: 5px 0;'><strong>时间范围:</strong> {event.get('event_time', 'N/A')}</p>
+            <p style='margin: 5px 0;'><strong>事件描述:</strong> {event.get('event_des', 'N/A')}</p>
+        </div>
+        """
+    return status_md + timeline_md
+
+
 # =================== UI段 ===================
 def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
     """创建简洁高效的UI界面"""
@@ -294,7 +379,7 @@ def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
 
     with gr.Blocks(
         title="FireVED: Fire Video Emergency Detection",
-        theme=gr.themes.Default()
+        theme=gr.themes.Soft()
     ) as demo:
         gr.HTML(HEADER)
 
@@ -302,7 +387,7 @@ def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
         conversation_state = gr.State([])
 
         with gr.Row():
-            # 右侧控制区域 (scale=2)
+            # 左侧控制区域 (scale=2)
             with gr.Column(scale=2):
                 with gr.Tab(label="Input"):
                     # 输入区域
@@ -318,6 +403,18 @@ def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
                     with gr.Row():
                         submit_btn = gr.Button("检测", variant="primary")
                         interrupt_btn = gr.Button("中断", variant="stop")
+
+                    # 状态显示
+                    status_display = gr.Textbox(
+                        label="系统状态",
+                        value="就绪",
+                        interactive=False,
+                        max_lines=2
+                    )
+
+                    # 对话控制
+                    with gr.Row():
+                        clear_btn = gr.Button("清空对话", size="sm")
 
                     # 视频案例
                     gr.Markdown("### Examples")
@@ -364,51 +461,76 @@ def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
 
                     reload_config_btn = gr.Button("重载配置", size="sm")
 
-            # 左侧聊天区域
+            # 右侧聊天区域
             with gr.Column(scale=2):
-                chatbot = gr.Chatbot(
-                    type="messages",
-                    height=570,
-                    bubble_full_width=False,
-                    show_copy_button=True,
-                    label="对话历史"
-                )
-
-                # 状态显示
-                status_display = gr.Textbox(
-                    label="系统状态",
-                    value="就绪",
-                    interactive=False,
-                    max_lines=2
-                )
-
-                # 对话控制
-                with gr.Row():
-                    clear_btn = gr.Button("清空对话", size="sm")
+                with gr.Blocks():
+                    chatbot = gr.Chatbot(
+                        type="messages",
+                        height=514,
+                        bubble_full_width=False,
+                        show_copy_button=True,
+                        label="对话历史"
+                    )
+                with gr.Blocks():
+                    timeline_output = gr.Markdown("### <p style='text-align:center;'>⚪ 等待分析...</p>", container=True)
 
         # 事件处理函数
         def handle_submit(video, history):
             """处理提交事件"""
             if not video:
-                return history, history, "请上传视频文件"
+                gr.Warning("请上传视频文件")
+                return history, history, "### <p style='text-align:center;'>⚪ 等待分析...</p>", "请上传视频文件"
 
             if app.model_status != "已加载":
-                return history, history, "请先加载模型"
+                gr.Warning("模型未加载，请先加载模型")
+                return history, history, "### <p style='text-align:center;'>⚪ 等待分析...</p>", "请先加载模型"
+
+            # 清空上一次的结果
+            initial_timeline_md = "## <p style='text-align:center;'>⏳ 分析进行中...</p>"
 
             # 添加用户消息（显示简化信息）
-            user_msg = {"role": "user", "content": "开始视频分析"}
+            user_msg = {"role": "user", "content": "视频分析任务已提交，请稍候..."}
             history.append(user_msg)
 
             # 添加助手消息占位符
-            assistant_msg = {"role": "assistant", "content": ""}
+            assistant_msg = {"role": "assistant", "content": "⏳ 开始分析，请稍候..."}
             history.append(assistant_msg)
+            yield history, history, initial_timeline_md, "分析中..."
 
+            final_result = ""
             # 流式分析（使用内部问题）
             for partial_response in app.stream_inference(video, question):
                 history[-1]["content"] = partial_response
-                yield history, history, f"分析中..."
+                final_result = partial_response
+                yield history, history, initial_timeline_md, "分析中..."
 
-            return history, history, "分析完成"
+            # 分析完成后，格式化最终结果
+            prefix = "✅ 分析完成\n\n"
+            if final_result.startswith(prefix):
+                json_part = final_result[len(prefix):].strip()
+
+                # 1. 为 timeline_output 生成HTML
+                combined_md = format_timeline_output(json_part)
+
+                # 2. 为Chatbot准备格式化的JSON
+                try:
+                    events = parse_model_output(json_part)
+                    # 确保即使只有一个事件，也以列表形式出现
+                    if isinstance(events, dict):
+                       events = [events]
+                    pretty_json = json.dumps(events, indent=2, ensure_ascii=False)
+                    chatbot_content = f"```json\n{pretty_json}\n```"
+                except Exception:
+                    chatbot_content = f"```json\n{json_part}\n```"
+
+                history[-1]["content"] = chatbot_content
+                yield history, history, combined_md, "分析完成"
+
+            else:
+                # 对于错误或超时等情况，直接显示
+                history[-1]["content"] = final_result
+                error_md = f"## <p style='color:red;text-align:center;'>❌ 分析失败或超时</p><p>错误信息: {final_result}</p>"
+                yield history, history, error_md, "分析失败"
 
         def handle_load_model():
             """处理模型加载"""
@@ -431,7 +553,7 @@ def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
         def handle_clear_conversation(history):
             """处理清空对话"""
             app.clear_conversation()
-            return [], [], "对话历史已清空"
+            return [], [], "### <p style='text-align:center;'>⚪ 等待分析...</p>", "对话历史已清空"
 
         def handle_reload_config():
             """处理配置重载"""
@@ -443,7 +565,7 @@ def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
         submit_btn.click(
             fn=handle_submit,
             inputs=[video_input, conversation_state],
-            outputs=[chatbot, conversation_state, status_display]
+            outputs=[chatbot, conversation_state, timeline_output, status_display]
         )
 
         load_btn.click(
@@ -464,7 +586,7 @@ def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
         clear_btn.click(
             fn=handle_clear_conversation,
             inputs=[conversation_state],
-            outputs=[chatbot, conversation_state, status_display]
+            outputs=[chatbot, conversation_state, timeline_output, status_display]
         )
 
         reload_config_btn.click(

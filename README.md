@@ -43,7 +43,7 @@ pip install -r requirements-infer.txt
 ## 📁 项目结构
 
 ```
-videollama3_gui/
+videollama3_gradio/
 ├── app.py                    # 主应用程序
 ├── infer.py                  # 推理脚本
 ├── fix_weights.py            # 权重修复工具
