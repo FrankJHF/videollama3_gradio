@@ -27,21 +27,7 @@ HEADER = ("""
   </div>
 </div>
 """)
-question = (
-        "请你分析视频片段，判断其中是否发生了与火灾或其他突发情况相关的应急事件。"
-        "请指出各事件其在视频片段中的时间范围，并简要描述事件内容。"
-        "若存在多个不同的事件，请按时间顺序输出多个json单元；"
-        "当视频中发生新的、有意义的、与火灾相关的事件，或当前事件状态发生显著变化时，"
-        "请开始一个新的事件段。事件段可以重叠。\n"
-        "每个事件输出要求如下（严格遵循 JSON 格式）：\n"
-        "{'emergency_exist': '是' 或 '否',  // 是否发生应急事件\n"
-        "  'event_time': '起始秒-结束秒',  // 时间范围，单位为秒，保留一位小数\n"
-        "  'event_des': '事件简要描述'  }\n"
-        "注意事项：时间是相对于该视频片段的局部时间（即片段起点为 0s）；"
-        "所有事件的范围交集要求覆盖全时段。请仅输出符合上述格式的 JSON。"
-        "当出现正常、异常事件切换时才区分事件输出，连续相同事件合并为一个事件表述，"
-        "事件表述尽可能短。有烟雾也是异常。"
-    )
+question = "<video>\n请你分析视频片段，判断其中是否发生了与火灾或其他突发情况相关的应急事件。请指出各事件其在视频片段中的时间范围，并简要描述事件内容。若存在多个不同的事件，请按时间顺序输出多个json单元；当视频中发生新的、有意义的、与火灾相关的事件，或当前事件状态发生显著变化时，请开始一个新的事件段。事件段可以重叠。\n每个事件输出要求如下（严格遵循 JSON 格式）：\n{'emergency_exist': '是' 或 '否',  // 是否发生应急事件\n  'event_time': '起始秒-结束秒',  // 时间范围，单位为秒，保留一位小数\n  'event_des': '事件简要描述'  }\n注意事项：时间是相对于该视频片段的局部时间（即片段起点为 0s）；所有事件的范围交集要求覆盖全时段。请仅输出符合上述格式的 JSON。当出现正常、异常事件切换时才区分事件输出，连续相同事件合并为一个事件表述，事件表述尽可能短。有烟雾也是异常。"
 
 try:
     from VideoLLaMA3.videollama3 import disable_torch_init, model_init, mm_infer
@@ -61,10 +47,10 @@ class Config:
             "attn_implementation": "flash_attention_2"
         },
         "inference": {
-            "fps": 1,
-            "max_frames": 180,
+            "fps": 1, # 尽量不要配置
+            "max_frames": 160,
             "modal": "video",
-            "max_new_tokens": 4096,
+            "max_new_tokens": 180,
             "do_sample": False,
             "merge_size": 2,
             "timeout": 300  # 5分钟超时
@@ -81,7 +67,7 @@ class Config:
             if os.path.exists(self.config_file):
                 with open(self.config_file, 'r', encoding='utf-8') as f:
                     user_config = yaml.safe_load(f)
-                    return self.merge_config(user_config)
+                    return user_config
             else:
                 # 创建默认配置文件
                 self.save_config(self.DEFAULT_CONFIG)
@@ -89,16 +75,6 @@ class Config:
         except Exception as e:
             print(f"配置加载失败，使用默认配置: {e}")
             return self.DEFAULT_CONFIG
-
-    def merge_config(self, user_config: Dict) -> Dict:
-        """合并用户配置和默认配置"""
-        merged = self.DEFAULT_CONFIG.copy()
-        for key, value in user_config.items():
-            if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
-                merged[key].update(value)
-            else:
-                merged[key] = value
-        return merged
 
     def save_config(self, config: Dict):
         """保存配置到文件"""
@@ -616,7 +592,7 @@ if __name__ == "__main__":
     demo.launch(
         server_name="0.0.0.0",
         server_port=7860,
-        share=True,
+        share=False,
         show_error=True,
         show_api=False,
         debug=False,
