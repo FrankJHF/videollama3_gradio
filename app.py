@@ -175,7 +175,8 @@ class VideoLLaMA3App:
             return f"模型卸载失败: {str(e)}"
 
     def stream_inference(self, video_path: str, question: str) -> Generator[str, None, None]:
-        """流式推理 - 基于mm_infer"""
+        """流式
+        - 基于mm_infer"""
         if self.model is None or self.processor is None:
             yield "❌ 模型未加载，请先加载模型"
             return
@@ -206,7 +207,7 @@ class VideoLLaMA3App:
 
             yield "🧠 正在预处理数据..."
 
-            # 使用完全相同的处理器和推理方式
+            # 使用完全相同的处理器和分析方式
             modal = self.config.config['inference']['modal']
             inputs = self.processor(
                 images=[frames] if modal != "text" else None,
@@ -215,7 +216,7 @@ class VideoLLaMA3App:
                 return_tensors="pt",
             )
 
-            yield "⚡ 正在推理中..."
+            yield "⚡ 正在分析中..."
 
             # 添加超时控制
             def run_inference():
@@ -228,25 +229,25 @@ class VideoLLaMA3App:
                     max_new_tokens=self.config.config['inference']['max_new_tokens']
                 )
 
-            # 使用线程池执行推理
+            # 使用线程池执行分析
             self.current_task = self.executor.submit(run_inference)
 
             try:
                 timeout = self.config.config['inference']['timeout']
                 result = self.current_task.result(timeout=timeout)
-                yield f"✅ 推理完成\n\n{result}"
+                yield f"✅ 分析完成\n\n{result}"
 
-                # 添加到会话历史
-                self.add_message("user", question)
+                # 添加到会话历史（使用简化的用户消息）
+                self.add_message("user", "开始视频分析")
                 self.add_message("assistant", result)
 
             except TimeoutError:
                 if self.current_task:
                     self.current_task.cancel()
-                yield "⏰ 推理超时，已中断"
+                yield "⏰ 分析超时，已中断"
 
         except Exception as e:
-            error_msg = f"❌ 推理失败: {str(e)}"
+            error_msg = f"❌ 分析失败: {str(e)}"
             print(error_msg)
             print(traceback.format_exc())
             yield error_msg
@@ -254,11 +255,11 @@ class VideoLLaMA3App:
             self.current_task = None
 
     def interrupt_inference(self) -> str:
-        """中断推理"""
+        """中断分析"""
         if self.current_task and not self.current_task.done():
             self.current_task.cancel()
-            return "推理已中断"
-        return "没有正在进行的推理"
+            return "分析已中断"
+        return "没有正在进行的分析"
 
     def add_message(self, role: str, content: str):
         """添加消息到历史"""
@@ -335,15 +336,6 @@ def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
                         sources=["upload"],
                     )
 
-                    question_input = gr.Textbox(
-                        visible=False,
-                        interactive=False,
-                        label="Question",
-                        placeholder="请输入您的问题...",
-                        lines=3,
-                        value=question
-                    )
-
                     # 按钮组
                     with gr.Row():
                         submit_btn = gr.Button("检测", variant="primary")
@@ -364,7 +356,7 @@ def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
                     if examples_data:
                         examples = gr.Examples(
                             examples=examples_data,
-                            inputs=[video_input, question_input],
+                            inputs=[video_input],
                             label="点击选择示例"
                         )
                     else:
@@ -395,31 +387,28 @@ def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
                     reload_config_btn = gr.Button("重载配置", size="sm")
 
         # 事件处理函数
-        def handle_submit(video, question, history):
+        def handle_submit(video, history):
             """处理提交事件"""
             if not video:
                 return history, history, "请上传视频文件"
 
-            if not question.strip():
-                return history, history, "请输入问题"
-
             if app.model_status != "已加载":
                 return history, history, "请先加载模型"
 
-            # 添加用户消息
-            user_msg = {"role": "user", "content": question}
+            # 添加用户消息（显示简化信息）
+            user_msg = {"role": "user", "content": "开始视频分析"}
             history.append(user_msg)
 
             # 添加助手消息占位符
             assistant_msg = {"role": "assistant", "content": ""}
             history.append(assistant_msg)
 
-            # 流式推理
+            # 流式分析（使用内部问题）
             for partial_response in app.stream_inference(video, question):
                 history[-1]["content"] = partial_response
-                yield history, history, f"推理中..."
+                yield history, history, f"分析中..."
 
-            return history, history, "推理完成"
+            return history, history, "分析完成"
 
         def handle_load_model():
             """处理模型加载"""
@@ -453,7 +442,7 @@ def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
         # 绑定事件
         submit_btn.click(
             fn=handle_submit,
-            inputs=[video_input, question_input, conversation_state],
+            inputs=[video_input, conversation_state],
             outputs=[chatbot, conversation_state, status_display]
         )
 
