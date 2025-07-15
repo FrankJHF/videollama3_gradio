@@ -46,7 +46,7 @@ pip install -r requirements-infer.txt
 videollama3_gradio/
 ├── app.py                    # 主应用程序
 ├── infer.py                  # 推理脚本
-├── fix_weights.py            # 权重修复工具
+├── fix_weights.py            # 修复模型键值
 ├── config.yaml               # 配置文件
 ├── pyproject.toml            # uv 项目配置
 ├── examples/                 # 示例视频

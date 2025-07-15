@@ -12,7 +12,7 @@ from VideoLLaMA3.videollama3.mm_utils import load_video, load_images, torch
 
 def main():
     disable_torch_init()
-    video_path = "examples/机器人.mp4"
+    video_path = "examples/UVID_00046.mp4"
     question = (
         "<video>\n"
         "请你分析视频片段，判断其中是否发生了与火灾或其他突发情况相关的应急事件。"
@@ -31,7 +31,7 @@ def main():
     )
 
     modal = "video"
-    frames, timestamps = load_video(video_path, fps=2, max_frames=160)
+    frames, timestamps = load_video(video_path, max_frames=160)
     conversation = [
         {
             "role": "user",
@@ -66,7 +66,7 @@ def main():
         tokenizer=processor.tokenizer,
         do_sample=False,
         modal=modal,
-        max_new_tokens=4096
+        max_new_tokens=180
     )
     print(output)
 

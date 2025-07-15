@@ -5,10 +5,10 @@ model:
   attn_implementation: flash_attention_2
 
 inference:
-  fps: 2
+  fps: 1
   max_frames: 160
   modal: video
-  max_new_tokens: 180
+  max_new_tokens: 1024
   do_sample: false
   merge_size: 2
   timeout: 300
