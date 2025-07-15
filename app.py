@@ -302,28 +302,6 @@ def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
         conversation_state = gr.State([])
 
         with gr.Row():
-            # 左侧聊天区域
-            with gr.Column(scale=2):
-                chatbot = gr.Chatbot(
-                    type="messages",
-                    height=570,
-                    bubble_full_width=False,
-                    show_copy_button=True,
-                    label="对话历史"
-                )
-
-                # 状态显示
-                status_display = gr.Textbox(
-                    label="系统状态",
-                    value="就绪",
-                    interactive=False,
-                    max_lines=2
-                )
-
-                # 对话控制
-                with gr.Row():
-                    clear_btn = gr.Button("清空对话", size="sm")
-
             # 右侧控制区域 (scale=2)
             with gr.Column(scale=2):
                 with gr.Tab(label="Input"):
@@ -385,6 +363,28 @@ def create_gradio_interface(app: VideoLLaMA3App) -> gr.Blocks:
                     )
 
                     reload_config_btn = gr.Button("重载配置", size="sm")
+
+            # 左侧聊天区域
+            with gr.Column(scale=2):
+                chatbot = gr.Chatbot(
+                    type="messages",
+                    height=570,
+                    bubble_full_width=False,
+                    show_copy_button=True,
+                    label="对话历史"
+                )
+
+                # 状态显示
+                status_display = gr.Textbox(
+                    label="系统状态",
+                    value="就绪",
+                    interactive=False,
+                    max_lines=2
+                )
+
+                # 对话控制
+                with gr.Row():
+                    clear_btn = gr.Button("清空对话", size="sm")
 
         # 事件处理函数
         def handle_submit(video, history):
