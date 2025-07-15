@@ -40,7 +40,7 @@ source .venv/bin/activate
 pip install -r requirements-infer.txt
 ```
 
-## 📁 项目结构
+## 项目结构
 
 ```
 videollama3_gradio/
@@ -59,7 +59,7 @@ videollama3_gradio/
 └── assets/                   # 静态资源
 ```
 
-## 🎮 使用方法
+## 使用方法
 
 ### 启动 Web 界面
 
@@ -92,3 +92,8 @@ inference:
   max_new_tokens: 180         # 最大生成token数
   timeout: 300                # 推理超时时间(秒)
 ```
+
+### 版本说明
+app_hf_template.py            # videollama3 huggingface模板
+app_wo_visualization.py       # videollama3 自定义模型导入，无可视化版本
+app.py                        # videollama3 自定义模型导入，可视化版本
