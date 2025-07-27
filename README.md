@@ -94,10 +94,10 @@ inference:
 ```
 
 ### 版本说明
-'''bash
+```bash
 app_hf_template.py            # videollama3 huggingface模板
 
 app_wo_visualization.py       # videollama3 自定义模型导入，无可视化版本
 
 app.py                        # videollama3 自定义模型导入，可视化版本
-'''
+```
