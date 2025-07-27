@@ -28,3 +28,6 @@ model*/
 
 # Examples
 examples/
+
+# Output
+results/
